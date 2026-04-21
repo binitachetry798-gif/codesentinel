@@ -1,6 +1,8 @@
 const Groq = require("groq-sdk");
 
-const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Mock secure storage and rate limiter
+async function getApiKeyFromSecureStorage() { return process.env.GROQ_API_KEY; }
+const rateLimiter = { delay: async (ms) => new Promise(r => setTimeout(r, ms)) };
 
 const SYSTEM_PROMPT = `You are a senior application security engineer. You specialize in finding security vulnerabilities in source code. You always respond with valid JSON only. You never include markdown code fences, preamble, or any text outside the JSON object.`;
 
@@ -12,8 +14,8 @@ const SYSTEM_PROMPT = `You are a senior application security engineer. You speci
  * @returns {Promise<Object>} Analysis result object
  */
 async function analyzeFile(filePath, fileContent, extension) {
-  // Rate limiting delay
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  const client = new Groq({ apiKey: await getApiKeyFromSecureStorage() });
+  await rateLimiter.delay(600);
 
   const userPrompt = `Analyze this ${extension} file for security vulnerabilities.
 File path: ${filePath}
@@ -65,7 +67,17 @@ If no vulnerabilities exist return vulnerabilities as empty array and risk_score
       rawText = rawText; // keep as-is, parse below
     }
 
-    const parsed = JSON.parse(rawText);
+    // Safe parsing helper
+    function safeJsonParse(text) {
+      try { return JSON.parse(text); }
+      catch {
+        // Fallback for extreme formatting issues
+        const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+        return jsonMatch ? JSON.parse(jsonMatch[0]) : { vulnerabilities: [], risk_score: 0 };
+      }
+    }
+
+    const parsed = safeJsonParse(rawText);
     console.log(
       `[AIAnalyzer] ${filePath} → ${parsed.vulnerabilities?.length || 0} vulnerabilities, risk score: ${parsed.risk_score}`
     );

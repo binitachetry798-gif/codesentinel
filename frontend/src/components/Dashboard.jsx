@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Shield, Home, Filter, SortDesc, ChevronDown } from "lucide-react";
+import DOMPurify from "dompurify";
 import ScanSummary from "./ScanSummary";
 import VulnerabilityCard from "./VulnerabilityCard";
 
@@ -145,7 +146,7 @@ export default function Dashboard() {
                     onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
                   >
                     <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: chipColor }}>
-                      {f.file?.split("/").pop()}
+                      {DOMPurify.sanitize(f.file?.split("/").pop())}
                     </span>
                     {score > 0 && (
                       <span style={{

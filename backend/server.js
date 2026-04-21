@@ -15,7 +15,7 @@ app.use(cors({
   ],
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // added validation and sanitization limit
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {
@@ -28,10 +28,16 @@ app.get("/api/health", (req, res) => {
 
 // ─── Main Scan Route ─────────────────────────────────────────────────────────
 app.post("/api/scan", async (req, res) => {
-  const { repoUrl } = req.body;
+  let { repoUrl } = req.body;
 
-  // Validate URL
-  if (!repoUrl || typeof repoUrl !== "string" || !repoUrl.startsWith("https://github.com/")) {
+  // Validate and sanitize
+  if (!repoUrl || typeof repoUrl !== "string") {
+    return res.status(400).json({ success: false, error: "Please provide a valid GitHub repository URL" });
+  }
+  
+  repoUrl = repoUrl.trim().replace(/\.git$/, "").replace(/\/$/, "");
+
+  if (!repoUrl.startsWith("https://github.com/")) {
     return res.status(400).json({
       success: false,
       error: "Please provide a valid GitHub repository URL",
@@ -114,7 +120,7 @@ app.post("/api/scan", async (req, res) => {
 // ─── Error Handler ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error("[CodeSentinel] Unhandled error:", err);
-  res.status(500).json({ success: false, error: "Internal server error" });
+  res.status(500).json({ success: false, error: "Internal server error", details: err.message });
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────────

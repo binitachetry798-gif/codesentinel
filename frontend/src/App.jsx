@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import axios from "axios";
+import DOMPurify from "dompurify";
 import HeroSection from "./components/HeroSection";
 import ScanInput from "./components/ScanInput";
 import ScanProgress from "./components/ScanProgress";
@@ -29,7 +30,12 @@ function HomePage() {
     setScanningRepo(repoUrl);
 
     try {
-      const response = await axios.post(`${API_BASE}/api/scan`, { repoUrl });
+      const validateRepoUrl = (url) => {
+        if (!url || typeof url !== "string") return "";
+        return url.trim().replace(/\.git$/, "").replace(/\/$/, "");
+      };
+      
+      const response = await axios.post(`${API_BASE}/api/scan`, { repoUrl: validateRepoUrl(repoUrl) });
       if (response.data.success) {
         navigate("/results", { state: { scanData: response.data } });
       } else {
@@ -42,6 +48,7 @@ function HomePage() {
         err.response?.data?.error ||
         err.message ||
         "Connection failed. Is the backend running?";
+      console.error('Scan failed:', msg);
       setScanError(msg);
       showToast(msg, "error");
       setIsScanning(false);
@@ -49,7 +56,7 @@ function HomePage() {
   };
 
   if (isScanning) {
-    return <ScanProgress repoUrl={scanningRepo} />;
+    return <ScanProgress repoUrl={DOMPurify.sanitize(scanningRepo)} />;
   }
 
   return (

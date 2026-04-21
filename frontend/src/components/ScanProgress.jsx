@@ -264,6 +264,7 @@ export default function ScanProgress({ repoUrl }) {
             gap: 1,
           }}>
             {terminalLines.map((line, i) => {
+              if (!line) return null;
               const isWarning = line.includes("⚠");
               const isComplete = line.includes("complete") || line.includes("Scan complete");
               return (
