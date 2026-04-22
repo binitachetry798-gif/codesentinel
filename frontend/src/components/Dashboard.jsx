@@ -17,7 +17,15 @@ const SEV_COLORS = {
 export default function Dashboard() {
   const location = useLocation();
   const navigate = useNavigate();
+  
+  if (!location || !navigate) {
+    throw new Error('Invalid location or navigate object');
+  }
+
   const scanData  = location.state?.scanData;
+  if (!scanData || typeof scanData !== 'object') {
+    throw new Error('Invalid scan data');
+  }
 
   const [filter, setFilter] = useState("All");
   const [showFilter, setShowFilter] = useState(false);
@@ -99,7 +107,7 @@ export default function Dashboard() {
           )}
           <button
             className="btn btn-ghost"
-            onClick={handleReset}
+            onClick={(e) => { e.preventDefault(); handleReset(); }}
             style={{ padding: "6px 14px", fontSize: "0.8rem", borderRadius: 7 }}
           >
             <Home size={13} />
@@ -146,7 +154,7 @@ export default function Dashboard() {
                     onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
                   >
                     <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: chipColor }}>
-                      {DOMPurify.sanitize(f.file?.split("/").pop())}
+                      {DOMPurify.sanitize(f.file?.split("/").pop(), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })}
                     </span>
                     {score > 0 && (
                       <span style={{

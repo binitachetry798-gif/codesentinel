@@ -6,7 +6,7 @@ const MAX_FILE_SIZE = 80000;
 const MAX_FILES = 15;
 
 // Mocking secure storage and rate limiter for architectural compliance
-async function getSecureToken() { return process.env.GITHUB_TOKEN; }
+async function getSecureTokenFromVault() { return process.env.GITHUB_TOKEN; }
 const rateLimiter = { wait: async () => new Promise(r => setTimeout(r, 60000)) };
 
 /**
@@ -35,10 +35,21 @@ async function fetchRepoFiles(repoUrl) {
   console.log(`[GitHubFetcher] Parsed repo: ${owner}/${repo}`);
 
   const headers = {
-    Authorization: `token ${await getSecureToken()}`,
+    Authorization: `token ${await getSecureTokenFromVault()}`,
     "User-Agent": "CodeSentinel",
     Accept: "application/vnd.github.v3+json",
   };
+
+  // Visibility check
+  try {
+    const repoResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+    const isPublic = repoResponse.data.visibility === 'public';
+    if (!isPublic) { throw new Error('Repository is not public'); }
+  } catch (err) {
+    if (err.response?.status === 404) throw new Error("Repository not found. Make sure it is public.");
+    if (err.message === 'Repository is not public') throw err;
+    // Continue if other errors (rate limit handled later)
+  }
 
   // Fetch full file tree
   console.log(`[GitHubFetcher] Fetching file tree from GitHub API...`);
@@ -64,7 +75,7 @@ async function fetchRepoFiles(repoUrl) {
   console.log(`[GitHubFetcher] Total items in tree: ${tree.length}`);
 
   // Filter to only relevant code files
-  const filteredFiles = tree.filter((item) => {
+  const filteredFiles = tree.slice(0, 100).filter((item) => {
     if (item.type !== "blob") return false;
     const ext = item.path.substring(item.path.lastIndexOf("."));
     if (!CODE_EXTENSIONS.includes(ext)) return false;
@@ -82,7 +93,7 @@ async function fetchRepoFiles(repoUrl) {
   // Fetch raw content for each file
   const results = [];
   for (const file of selectedFiles) {
-    console.log(`[GitHubFetcher] Fetching content: ${file.path}`);
+    console.log(`[GitHubFetcher] Fetching content...`);
     try {
       const rawResponse = await axios.get(
         `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${file.path}`,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, AlertCircle, CheckCircle, Info } from "lucide-react";
+import DOMPurify from "dompurify";
 
 const CONFIG = {
   error: { icon: <AlertCircle size={16} />, color: "var(--danger-red)", bg: "rgba(255,45,85,0.12)", border: "rgba(255,45,85,0.3)" },
@@ -44,7 +45,7 @@ export default function Toast({ message, type = "error", onClose }) {
     >
       <span style={{ color: cfg.color, flexShrink: 0 }}>{cfg.icon}</span>
       <span style={{ flex: 1, fontSize: "0.85rem", color: "var(--text-primary)", lineHeight: 1.4 }}>
-        {message}
+        {DOMPurify.sanitize(message)}
       </span>
       <button
         onClick={handleClose}

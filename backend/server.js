@@ -1,10 +1,17 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 const fetchRepoFiles = require("./githubFetcher");
 const { analyzeFile } = require("./aiAnalyzer");
 
 const app = express();
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // Limit each IP to 100 requests per `window` (here, per minute)
+});
+app.use(apiLimiter);
 
 // Middleware
 app.use(cors({
@@ -15,7 +22,7 @@ app.use(cors({
   ],
   credentials: true,
 }));
-app.use(express.json({ limit: '10mb' })); // added validation and sanitization limit
+app.use(express.json({ limit: '1mb' })); // added validation and sanitization limit
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {
@@ -119,7 +126,7 @@ app.post("/api/scan", async (req, res) => {
 
 // ─── Error Handler ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error("[CodeSentinel] Unhandled error:", err);
+  console.error("[CodeSentinel] Unhandled error:", { method: req.method, url: req.url, error: err });
   res.status(500).json({ success: false, error: "Internal server error", details: err.message });
 });
 

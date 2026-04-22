@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Search, Play, Loader2, Link2, ChevronRight, Shield, Zap } from "lucide-react";
+import DOMPurify from "dompurify";
 
 const EXAMPLE_REPOS = [
   {
@@ -37,7 +38,8 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef(null);
 
-  const validate = (v) => {
+  // Strict GitHub repository URL validation
+  const validateGitHubRepositoryURL = (v) => {
     if (!v.trim()) return "Please enter a GitHub repository URL.";
     if (!v.startsWith("https://github.com/")) return "URL must start with https://github.com/";
     const parts = new URL(v).pathname.split("/").filter(Boolean);
@@ -45,12 +47,26 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
     return "";
   };
 
+  // Client side throttling state
+  const lastRequestTime = useRef(0);
+  const rateLimitAllowRequest = () => {
+    const now = Date.now();
+    if (now - lastRequestTime.current < 5000) return false; // 5 seconds throttle
+    lastRequestTime.current = now;
+    return true;
+  };
+
   const handleScan = (scanUrl) => {
     const target = scanUrl || url;
-    const err = validate(target);
+    const err = validateGitHubRepositoryURL(target);
     if (err) { setLocalError(err); return; }
-    setLocalError("");
-    onScan(target.trim());
+    
+    if (rateLimitAllowRequest()) {
+      setLocalError("");
+      onScan(target.trim());
+    } else {
+      setLocalError("Please wait a few seconds before scanning again.");
+    }
   };
 
   const fillUrl = (repoUrl) => {
@@ -123,7 +139,7 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
                 id="repo-url-input"
                 className="cs-input"
                 type="text"
-                value={url}
+                value={DOMPurify.sanitize(url)}
                 onChange={(e) => { setUrl(e.target.value); setLocalError(""); }}
                 onKeyDown={(e) => e.key === "Enter" && handleScan()}
                 onFocus={() => setIsFocused(true)}

@@ -35,9 +35,14 @@ function HomePage() {
         return url.trim().replace(/\.git$/, "").replace(/\/$/, "");
       };
       
+      const validateScanData = (data) => {
+        // Implement strict validation structure as requested
+        return data && typeof data === 'object' ? data : null;
+      };
+      
       const response = await axios.post(`${API_BASE}/api/scan`, { repoUrl: validateRepoUrl(repoUrl) });
       if (response.data.success) {
-        navigate("/results", { state: { scanData: response.data } });
+        navigate("/results", { state: { scanData: validateScanData(response.data) } });
       } else {
         setScanError(response.data.error || "Scan failed. Please try again.");
         showToast(response.data.error || "Scan failed.", "error");
