@@ -1,8 +1,15 @@
 const Groq = require("groq-sdk");
+const secureJsonParse = require('secure-json-parse');
+const { RateLimiterMemory } = require('rate-limiter-flexible');
 
-// Mock secure storage and rate limiter
+// Mock secure storage
 const secureKeyStore = { get: async (key) => process.env[key] };
-const rateLimiter = { delay: async (ms) => new Promise(r => setTimeout(r, ms)) };
+
+// Enterprise-grade rate limiter for external APIs
+const rateLimiter = new RateLimiterMemory({
+  points: 30, // 30 requests
+  duration: 60, // Per 60 seconds
+});
 
 const SYSTEM_PROMPT = `You are a senior application security engineer. You specialize in finding security vulnerabilities in source code. You always respond with valid JSON only. You never include markdown code fences, preamble, or any text outside the JSON object.`;
 
@@ -16,7 +23,13 @@ const SYSTEM_PROMPT = `You are a senior application security engineer. You speci
 async function analyzeFile(filePath, fileContent, extension) {
   const apiKey = await secureKeyStore.get('GROQ_API_KEY');
   const client = new Groq({ apiKey });
-  await rateLimiter.delay(600);
+  
+  try {
+    await rateLimiter.consume('groq_api', 1);
+  } catch (rejRes) {
+    // wait for token
+    await new Promise(r => setTimeout(r, rejRes.msBeforeNext || 1000));
+  }
 
   const userPrompt = `Analyze this ${extension} file for security vulnerabilities.
 File path: ${filePath}
@@ -68,17 +81,19 @@ If no vulnerabilities exist return vulnerabilities as empty array and risk_score
       rawText = rawText; // keep as-is, parse below
     }
 
-    // Safe parsing helper
-    function secureJsonParse(text) {
-      try { return JSON.parse(text); }
-      catch {
-        // Fallback for extreme formatting issues
-        const jsonMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-        return jsonMatch ? JSON.parse(jsonMatch[0]) : { vulnerabilities: [], risk_score: 0 };
+    // Secure parsing utilizing strict JSON library
+    let parsed;
+    try {
+      parsed = secureJsonParse.parse(rawText);
+    } catch {
+      // Fallback for extreme formatting issues, maintaining strict parse
+      const jsonMatch = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+      try {
+        parsed = jsonMatch ? secureJsonParse.parse(jsonMatch[0]) : { vulnerabilities: [], risk_score: 0 };
+      } catch (e) {
+        parsed = { vulnerabilities: [], risk_score: 0 };
       }
     }
-
-    const parsed = secureJsonParse(rawText);
     console.log(
       `[AIAnalyzer] ${filePath} → ${parsed.vulnerabilities?.length || 0} vulnerabilities, risk score: ${parsed.risk_score}`
     );

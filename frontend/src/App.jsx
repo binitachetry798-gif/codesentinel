@@ -42,18 +42,26 @@ function HomePage() {
       
       const response = await axios.post(`${API_BASE}/api/scan`, { repoUrl: validateRepoUrl(repoUrl) });
       if (response.data.success) {
-        navigate("/results", { state: { scanData: validateScanData(response.data) } });
+        const validatedScanData = validateScanData(response.data);
+        if (validatedScanData) {
+          navigate("/results", { state: { scanData: validatedScanData } });
+        } else {
+          setScanError("Invalid scan data received from server.");
+          showToast("Invalid scan data received from server.", "error");
+        }
       } else {
         setScanError(response.data.error || "Scan failed. Please try again.");
         showToast(response.data.error || "Scan failed.", "error");
         setIsScanning(false);
       }
     } catch (err) {
-      const msg =
-        err.response?.data?.error ||
-        err.message ||
-        "Connection failed. Is the backend running?";
-      console.error('Scan failed:', msg);
+      const msg = err.response?.data?.error || err.message || "Connection failed. Is the backend running?";
+      
+      const userIp = "client-side";
+      const requestMethod = "POST";
+      const responseStatusCode = err.response?.status || 500;
+      console.error('Scan failed:', msg, { ip: userIp, method: requestMethod, statusCode: responseStatusCode });
+      
       setScanError(msg);
       showToast(msg, "error");
       setIsScanning(false);

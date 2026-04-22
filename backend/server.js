@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const fetchRepoFiles = require("./githubFetcher");
 const { analyzeFile } = require("./aiAnalyzer");
@@ -8,9 +9,12 @@ const { analyzeFile } = require("./aiAnalyzer");
 const app = express();
 
 const apiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 100, // Limit each IP to 100 requests per `window` (here, per minute)
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
+app.use(helmet());
 app.use(apiLimiter);
 
 // Middleware
@@ -22,7 +26,7 @@ app.use(cors({
   ],
   credentials: true,
 }));
-app.use(express.json({ limit: '1mb' })); // added validation and sanitization limit
+app.use(express.json({ limit: '1mb', strict: true })); // added validation and sanitization limit
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {
@@ -44,7 +48,13 @@ app.post("/api/scan", async (req, res) => {
   
   repoUrl = repoUrl.trim().replace(/\.git$/, "").replace(/\/$/, "");
 
-  if (!repoUrl.startsWith("https://github.com/")) {
+  // Strict URL Validation
+  try {
+    const urlObj = new URL(repoUrl);
+    if (urlObj.protocol !== 'https:' || urlObj.hostname !== 'github.com') {
+      throw new Error('Invalid protocol or hostname');
+    }
+  } catch (err) {
     return res.status(400).json({
       success: false,
       error: "Please provide a valid GitHub repository URL",
@@ -126,7 +136,7 @@ app.post("/api/scan", async (req, res) => {
 
 // ─── Error Handler ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error("[CodeSentinel] Unhandled error:", { method: req.method, url: req.url, error: err });
+  console.error("[CodeSentinel] Unhandled error:", { method: req.method, url: req.url, error: err, stack: err.stack });
   res.status(500).json({ success: false, error: "Internal server error", details: err.message });
 });
 

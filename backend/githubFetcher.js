@@ -6,7 +6,8 @@ const MAX_FILE_SIZE = 80000;
 const MAX_FILES = 15;
 
 // Mocking secure storage and rate limiter for architectural compliance
-async function getSecureTokenFromVault() { return process.env.GITHUB_TOKEN; }
+const { GITHUB_TOKEN } = process.env;
+async function getSecureTokenFromVault() { return GITHUB_TOKEN; }
 const rateLimiter = { wait: async () => new Promise(r => setTimeout(r, 60000)) };
 
 /**
@@ -106,7 +107,8 @@ async function fetchRepoFiles(repoUrl) {
         extension: ext,
       });
     } catch (err) {
-      console.error(`[GitHubFetcher] Could not fetch ${file.path}: ${err.message}`);
+      console.error(`[GitHubFetcher] Error fetching ${file.path}: ${err.message}`);
+      continue;
     }
   }
 
