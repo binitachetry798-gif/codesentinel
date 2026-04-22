@@ -23,7 +23,7 @@ export default function Dashboard() {
   }
 
   const scanData  = location.state?.scanData;
-  if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.vulnerabilities)) {
+  if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.all_vulnerabilities)) {
     throw new Error('Invalid scan data');
   }
 
