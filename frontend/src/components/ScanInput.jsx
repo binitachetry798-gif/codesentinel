@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { Search, Play, Loader2, Link2, ChevronRight, Shield, Zap } from "lucide-react";
-import DOMPurify from "dompurify";
 
 const EXAMPLE_REPOS = [
   {
@@ -139,7 +138,7 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
                 id="repo-url-input"
                 className="cs-input"
                 type="text"
-                value={DOMPurify.sanitize(url)}
+                value={url}
                 onChange={(e) => { setUrl(e.target.value); setLocalError(""); }}
                 onKeyDown={(e) => e.key === "Enter" && handleScan()}
                 onFocus={() => setIsFocused(true)}

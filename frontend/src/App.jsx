@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import axios from "axios";
-import DOMPurify from "dompurify";
 import HeroSection from "./components/HeroSection";
 import ScanInput from "./components/ScanInput";
 import ScanProgress from "./components/ScanProgress";
@@ -36,8 +35,13 @@ function HomePage() {
       };
       
       const validateScanData = (data) => {
-        // Implement strict validation structure as requested
-        return data && typeof data === 'object' ? data : null;
+        if (!data || typeof data !== 'object') return null;
+        if (!data.stats || typeof data.stats !== 'object') {
+          data.stats = { total_vulnerabilities: 0, critical_count: 0, high_count: 0, medium_count: 0, low_count: 0, overall_risk_score: 0, files_scanned: 0, scan_time_seconds: 0 };
+        }
+        if (!Array.isArray(data.all_vulnerabilities)) data.all_vulnerabilities = [];
+        if (!Array.isArray(data.files)) data.files = [];
+        return data;
       };
       
       const response = await axios.post(`${API_BASE}/api/scan`, { repoUrl: validateRepoUrl(repoUrl) });
@@ -69,7 +73,7 @@ function HomePage() {
   };
 
   if (isScanning) {
-    return <ScanProgress repoUrl={DOMPurify.sanitize(scanningRepo)} />;
+    return <ScanProgress repoUrl={scanningRepo} />;
   }
 
   return (

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Shield, Home, Filter, SortDesc, ChevronDown } from "lucide-react";
-import DOMPurify from "dompurify";
 import ScanSummary from "./ScanSummary";
 import VulnerabilityCard from "./VulnerabilityCard";
 
@@ -23,15 +22,19 @@ export default function Dashboard() {
   }
 
   const scanData  = location.state?.scanData;
-  if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.all_vulnerabilities)) {
-    throw new Error('Invalid scan data');
-  }
 
   const [filter, setFilter] = useState("All");
   const [showFilter, setShowFilter] = useState(false);
 
-  useEffect(() => { if (!scanData) navigate("/"); }, [scanData, navigate]);
-  if (!scanData) return null;
+  useEffect(() => {
+    if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.all_vulnerabilities)) {
+      navigate("/");
+    }
+  }, [scanData, navigate]);
+
+  if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.all_vulnerabilities)) {
+    return null;
+  }
 
   const { stats, repo_url, all_vulnerabilities, files } = scanData;
   const handleReset = () => navigate("/");
@@ -154,7 +157,7 @@ export default function Dashboard() {
                     onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
                   >
                     <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: chipColor }}>
-                      {DOMPurify.sanitize(f.file?.split("/").pop(), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })}
+                      {f.file ? f.file.split("/").pop() : "unknown"}
                     </span>
                     {score > 0 && (
                       <span style={{
