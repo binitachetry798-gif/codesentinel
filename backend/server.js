@@ -3,30 +3,54 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const jsonschema = require("jsonschema");
 const fetchRepoFiles = require("./githubFetcher");
 const { analyzeFile } = require("./aiAnalyzer");
 
 const app = express();
+
+const schema = {
+  type: "object",
+  properties: {
+    repoUrl: { type: "string" },
+  },
+  required: ["repoUrl"],
+};
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
 });
+
 app.use(helmet());
 app.use(apiLimiter);
 
 // Middleware
-app.use(cors({
+const corsOptions = {
   origin: [
     "http://localhost:5173",
     /\.vercel\.app$/,           // all vercel preview + production URLs
     /\.onrender\.com$/,         // render preview URLs
   ],
   credentials: true,
-}));
-app.use(express.json({ limit: '1mb', strict: true })); // added validation and sanitization limit
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
+app.use(express.json({ limit: "1mb", strict: true }));
+
+// ─── Body Validation Middleware ──────────────────────────────────────────────
+app.use((req, res, next) => {
+  if (req.method === "POST" && req.path === "/api/scan") {
+    const result = jsonschema.validate(req.body, schema);
+    if (!result.valid) {
+      return res.status(400).json({ success: false, error: "Invalid JSON data" });
+    }
+  }
+  next();
+});
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get("/api/health", (req, res) => {
@@ -51,8 +75,8 @@ app.post("/api/scan", async (req, res) => {
   // Strict URL Validation
   try {
     const urlObj = new URL(repoUrl);
-    if (urlObj.protocol !== 'https:' || urlObj.hostname !== 'github.com') {
-      throw new Error('Invalid protocol or hostname');
+    if (urlObj.protocol !== "https:" || urlObj.hostname !== "github.com") {
+      throw new Error("Invalid protocol or hostname");
     }
   } catch (err) {
     return res.status(400).json({
@@ -105,8 +129,6 @@ app.post("/api/scan", async (req, res) => {
   const high_count = allVulnerabilities.filter((v) => v.severity === "High").length;
   const medium_count = allVulnerabilities.filter((v) => v.severity === "Medium").length;
   const low_count = allVulnerabilities.filter((v) => v.severity === "Low").length;
-  // Weighted risk score based on severity (AI per-file scores are unreliable/low-range)
-  // Critical=10, High=5, Medium=2, Low=1 — capped at 100
   const weightedScore = critical_count * 10 + high_count * 5 + medium_count * 2 + low_count * 1;
   const overall_risk_score = Math.min(100, weightedScore);
   const files_scanned = fileResults.length;
@@ -136,8 +158,14 @@ app.post("/api/scan", async (req, res) => {
 
 // ─── Error Handler ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error("[CodeSentinel] Unhandled error:", { method: req.method, url: req.url, error: err, stack: err.stack });
-  res.status(500).json({ success: false, error: "Internal server error", details: err.message });
+  console.error("[CodeSentinel] Unhandled error:", {
+    method: req.method,
+    url: req.url,
+    user_agent: req.headers["user-agent"],
+    error: err.message,
+    stack: err.stack,
+  });
+  res.status(500).json({ success: false, error: "Internal server error" });
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────────

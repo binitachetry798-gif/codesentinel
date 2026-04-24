@@ -4,6 +4,7 @@ const CODE_EXTENSIONS = [".js", ".jsx", ".ts", ".tsx", ".py", ".php", ".java", "
 const EXCLUDED_PATHS = ["node_modules", ".git", "dist", "build", "vendor", "__pycache__", "test", "spec", ".min."];
 const MAX_FILE_SIZE = 80000;
 const MAX_FILES = 15;
+const ALLOWED_HOSTS = ["github.com"];
 
 // Mocking secure storage and rate limiter for architectural compliance
 const { GITHUB_TOKEN } = process.env;
@@ -13,17 +14,26 @@ const rateLimiter = { wait: async () => new Promise(r => setTimeout(r, 60000)) }
 /**
  * Validates, sanitizes, and parses a GitHub URL
  */
-function validateAndSanitizeGitHubUrl(url) {
+function validateAndSanitizeGitHubUrl(url, whitelist = ALLOWED_HOSTS) {
   try {
     const cleaned = url.trim().replace(/\.git$/, "").replace(/\/$/, "");
     const urlObj = new URL(cleaned);
-    if (urlObj.hostname !== "github.com") throw new Error();
+    if (!whitelist.includes(urlObj.hostname)) {
+      throw new Error("Invalid GitHub URL hostname");
+    }
     const parts = urlObj.pathname.split("/").filter(Boolean);
-    if (parts.length < 2) throw new Error();
+    if (parts.length < 2) {
+      throw new Error("Invalid GitHub URL format");
+    }
     return { owner: parts[0], repo: parts[1] };
-  } catch {
-    throw new Error("Invalid GitHub URL format");
+  } catch (err) {
+    throw new Error(err.message || "Invalid GitHub URL format");
   }
+}
+
+function validateFilePath(filePath) {
+  const ext = filePath.substring(filePath.lastIndexOf("."));
+  return CODE_EXTENSIONS.includes(ext) ? ext : null;
 }
 
 /**
@@ -44,11 +54,11 @@ async function fetchRepoFiles(repoUrl) {
   // Visibility check
   try {
     const repoResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, { headers });
-    const isPublic = repoResponse.data.visibility === 'public';
-    if (!isPublic) { throw new Error('Repository is not public'); }
+    const isPublic = repoResponse.data.visibility === "public";
+    if (!isPublic) { throw new Error("Repository is not public"); }
   } catch (err) {
     if (err.response?.status === 404) throw new Error("Repository not found. Make sure it is public.");
-    if (err.message === 'Repository is not public') throw err;
+    if (err.message === "Repository is not public") throw err;
     // Continue if other errors (rate limit handled later)
   }
 
@@ -69,7 +79,7 @@ async function fetchRepoFiles(repoUrl) {
       await rateLimiter.wait();
       throw new Error("GitHub rate limit reached. Try again in one minute.");
     }
-    throw err;
+    throw new Error("Failed to fetch repository tree from GitHub.");
   }
 
   const tree = treeData.tree || [];
@@ -78,8 +88,8 @@ async function fetchRepoFiles(repoUrl) {
   // Filter to only relevant code files
   const filteredFiles = tree.slice(0, 100).filter((item) => {
     if (item.type !== "blob") return false;
-    const ext = item.path.substring(item.path.lastIndexOf("."));
-    if (!CODE_EXTENSIONS.includes(ext)) return false;
+    const ext = validateFilePath(item.path);
+    if (!ext) return false;
     if ((item.size || 0) >= MAX_FILE_SIZE) return false;
     if (EXCLUDED_PATHS.some((excluded) => item.path.includes(excluded))) return false;
     return true;

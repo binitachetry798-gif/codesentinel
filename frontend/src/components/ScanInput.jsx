@@ -39,10 +39,15 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
 
   // Strict GitHub repository URL validation
   const validateGitHubRepositoryURL = (v) => {
-    if (!v.trim()) return "Please enter a GitHub repository URL.";
-    if (!v.startsWith("https://github.com/")) return "URL must start with https://github.com/";
-    const parts = new URL(v).pathname.split("/").filter(Boolean);
-    if (parts.length < 2) return "Please include both owner and repository name.";
+    if (!v || !v.trim()) return "Please enter a GitHub repository URL.";
+    const targetUrl = v.trim();
+    if (!targetUrl.startsWith("https://github.com/")) return "URL must start with https://github.com/";
+    try {
+      const parts = new URL(targetUrl).pathname.split("/").filter(Boolean);
+      if (parts.length < 2) return "Please include both owner and repository name.";
+    } catch (e) {
+      return "Invalid URL format.";
+    }
     return "";
   };
 
@@ -69,9 +74,11 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
   };
 
   const fillUrl = (repoUrl) => {
-    setUrl(repoUrl);
-    setLocalError("");
-    inputRef.current?.focus();
+    if (validateGitHubRepositoryURL(repoUrl) === "") {
+      setUrl(repoUrl);
+      setLocalError("");
+      inputRef.current?.focus();
+    }
   };
 
   const displayError = localError || externalError;
@@ -139,7 +146,12 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
                 className="cs-input"
                 type="text"
                 value={url}
-                onChange={(e) => { setUrl(e.target.value); setLocalError(""); }}
+                onChange={(e) => {
+                  // Sanitize input: allow only common URL characters
+                  const sanitizedUrl = e.target.value.replace(/[^a-zA-Z0-9:/._-]/g, "");
+                  setUrl(sanitizedUrl);
+                  setLocalError("");
+                }}
                 onKeyDown={(e) => e.key === "Enter" && handleScan()}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}

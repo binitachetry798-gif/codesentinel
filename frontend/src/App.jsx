@@ -8,7 +8,6 @@ import Dashboard from "./components/Dashboard";
 import Toast from "./components/Toast";
 
 // In production (Vercel), use the Render backend URL from env var
-// In dev, empty string → Vite proxy handles /api/* → localhost:5000
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 function HomePage() {
@@ -35,8 +34,8 @@ function HomePage() {
       };
       
       const validateScanData = (data) => {
-        if (!data || typeof data !== 'object') return null;
-        if (!data.stats || typeof data.stats !== 'object') {
+        if (!data || typeof data !== "object") return null;
+        if (!data.stats || typeof data.stats !== "object") {
           data.stats = { total_vulnerabilities: 0, critical_count: 0, high_count: 0, medium_count: 0, low_count: 0, overall_risk_score: 0, files_scanned: 0, scan_time_seconds: 0 };
         }
         if (!Array.isArray(data.all_vulnerabilities)) data.all_vulnerabilities = [];
@@ -48,26 +47,27 @@ function HomePage() {
       if (response.data.success) {
         const validatedScanData = validateScanData(response.data);
         if (validatedScanData) {
-          navigate("/results", { state: { scanData: validatedScanData } });
+          // Deep clone scanData to prevent side effects
+          const scanDataClone = JSON.parse(JSON.stringify(validatedScanData));
+          navigate("/results", { state: { scanData: scanDataClone } });
         } else {
-          setScanError("Invalid scan data received from server.");
-          showToast("Invalid scan data received from server.", "error");
+          const errMsg = "Invalid scan data received from server.";
+          setScanError(errMsg);
+          showToast(errMsg, "error");
         }
       } else {
-        setScanError(response.data.error || "Scan failed. Please try again.");
-        showToast(response.data.error || "Scan failed.", "error");
+        const errMsg = response.data.error || "Scan failed. Please try again.";
+        setScanError(errMsg);
+        showToast(errMsg, "error");
         setIsScanning(false);
       }
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || "Connection failed. Is the backend running?";
+      // Use generic error message for the UI
+      const genericMsg = "Scan failed. Please verify the URL and try again.";
+      console.error("Scan failed:", err.message);
       
-      const userIp = "client-side";
-      const requestMethod = "POST";
-      const responseStatusCode = err.response?.status || 500;
-      console.error('Scan failed:', msg, { ip: userIp, method: requestMethod, statusCode: responseStatusCode });
-      
-      setScanError(msg);
-      showToast(msg, "error");
+      setScanError(genericMsg);
+      showToast(genericMsg, "error");
       setIsScanning(false);
     }
   };

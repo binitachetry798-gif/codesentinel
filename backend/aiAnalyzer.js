@@ -1,9 +1,17 @@
 const Groq = require("groq-sdk");
-const secureJsonParse = require('secure-json-parse');
-const { RateLimiterMemory } = require('rate-limiter-flexible');
+const secureJsonParse = require("secure-json-parse");
+const { RateLimiterMemory } = require("rate-limiter-flexible");
 
-// Mock secure storage
-const secureKeyStore = { get: async (key) => process.env[key] };
+// Mock secure storage with key validation
+const secureKeyStore = {
+  get: async (key) => {
+    const allowedKeys = ["GROQ_API_KEY"];
+    if (!allowedKeys.includes(key)) {
+      throw new Error(`Access denied for key: ${key}`);
+    }
+    return process.env[key];
+  },
+};
 
 // Enterprise-grade rate limiter for external APIs
 const rateLimiter = new RateLimiterMemory({
@@ -21,11 +29,14 @@ const SYSTEM_PROMPT = `You are a senior application security engineer. You speci
  * @returns {Promise<Object>} Analysis result object
  */
 async function analyzeFile(filePath, fileContent, extension) {
-  const apiKey = await secureKeyStore.get('GROQ_API_KEY');
+  const apiKey = await secureKeyStore.get("GROQ_API_KEY");
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is not configured");
+  }
   const client = new Groq({ apiKey });
   
   try {
-    await rateLimiter.consume('groq_api', 1);
+    await rateLimiter.consume("groq_api", 1);
   } catch (rejRes) {
     // wait for token
     await new Promise(r => setTimeout(r, rejRes.msBeforeNext || 1000));
@@ -76,24 +87,21 @@ If no vulnerabilities exist return vulnerabilities as empty array and risk_score
     // Clean any accidental markdown fences
     rawText = rawText.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
 
-    // Handle potential array vs object
-    if (rawText.startsWith("[")) {
-      rawText = rawText; // keep as-is, parse below
-    }
-
     // Secure parsing utilizing strict JSON library
     let parsed;
     try {
       parsed = secureJsonParse.parse(rawText);
-    } catch {
-      // Fallback for extreme formatting issues, maintaining strict parse
-      const jsonMatch = rawText.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-      try {
-        parsed = jsonMatch ? secureJsonParse.parse(jsonMatch[0]) : { vulnerabilities: [], risk_score: 0 };
-      } catch (e) {
-        parsed = { vulnerabilities: [], risk_score: 0 };
-      }
+    } catch (e) {
+      console.warn(`[AIAnalyzer] Parsing error for ${filePath}: ${e.message}`);
+      // Return structured failure rather than weak regex fallback
+      return {
+        file: filePath,
+        vulnerabilities: [],
+        file_summary: "Analysis failed due to response parsing error.",
+        risk_score: 0,
+      };
     }
+
     console.log(
       `[AIAnalyzer] ${filePath} → ${parsed.vulnerabilities?.length || 0} vulnerabilities, risk score: ${parsed.risk_score}`
     );

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Shield, Home, Filter, SortDesc, ChevronDown } from "lucide-react";
+import DOMPurify from "isomorphic-dompurify";
 import ScanSummary from "./ScanSummary";
 import VulnerabilityCard from "./VulnerabilityCard";
 
@@ -18,21 +19,21 @@ export default function Dashboard() {
   const navigate = useNavigate();
   
   if (!location || !navigate) {
-    throw new Error('Invalid location or navigate object');
+    throw new Error("Invalid location or navigate object");
   }
 
-  const scanData  = location.state?.scanData;
+  const scanData = location.state?.scanData;
 
   const [filter, setFilter] = useState("All");
   const [showFilter, setShowFilter] = useState(false);
 
   useEffect(() => {
-    if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.all_vulnerabilities)) {
+    if (!scanData || typeof scanData !== "object" || !Array.isArray(scanData.all_vulnerabilities)) {
       navigate("/");
     }
   }, [scanData, navigate]);
 
-  if (!scanData || typeof scanData !== 'object' || !Array.isArray(scanData.all_vulnerabilities)) {
+  if (!scanData || typeof scanData !== "object" || !Array.isArray(scanData.all_vulnerabilities)) {
     return null;
   }
 
@@ -46,6 +47,9 @@ export default function Dashboard() {
   const filtered = filter === "All" ? sorted : sorted.filter((v) => v.severity === filter);
 
   const filterOptions = ["All", "Critical", "High", "Medium", "Low"];
+
+  // Sanitize repo_url for safe use in links/text
+  const sanitizedRepoUrl = repo_url ? DOMPurify.sanitize(repo_url) : "";
 
   return (
     <div className="mesh-bg" style={{ minHeight: "100vh" }}>
@@ -122,7 +126,7 @@ export default function Dashboard() {
       {/* ══ Main Content ══ */}
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px 20px 80px" }}>
         {/* Summary card */}
-        <ScanSummary stats={stats} repoUrl={repo_url} onReset={handleReset} />
+        <ScanSummary stats={stats} repoUrl={sanitizedRepoUrl} onReset={handleReset} />
 
         {/* Files scanned chips */}
         {files?.length > 0 && (
@@ -141,8 +145,10 @@ export default function Dashboard() {
               {files.map((f) => {
                 const score = f.risk_score || 0;
                 const chipColor = score > 70 ? "var(--red)" : score > 40 ? "var(--orange)" : "var(--text-3)";
+                // Sanitize file path/name
+                const fileName = f.file ? DOMPurify.sanitize(f.file.split("/").pop()) : "unknown";
                 return (
-                  <div key={f.file} title={f.file} style={{
+                  <div key={f.file} title={DOMPurify.sanitize(f.file)} style={{
                     padding: "4px 10px",
                     background: "rgba(255,255,255,0.03)",
                     border: `1px solid ${score > 70 ? "rgba(255,51,102,0.2)" : score > 40 ? "rgba(255,140,0,0.15)" : "rgba(255,255,255,0.06)"}`,
@@ -157,7 +163,7 @@ export default function Dashboard() {
                     onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
                   >
                     <span style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: chipColor }}>
-                      {f.file ? f.file.split("/").pop() : "unknown"}
+                      {fileName}
                     </span>
                     {score > 0 && (
                       <span style={{
