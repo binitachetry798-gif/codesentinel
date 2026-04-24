@@ -4,6 +4,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const jsonschema = require("jsonschema");
+const path = require("path");
 const fetchRepoFiles = require("./githubFetcher");
 const { analyzeFile } = require("./aiAnalyzer");
 
@@ -44,7 +45,9 @@ app.use(express.json({ limit: "1mb", strict: true }));
 // ─── Body Validation Middleware ──────────────────────────────────────────────
 app.use((req, res, next) => {
   if (req.method === "POST" && req.path === "/api/scan") {
-    const result = jsonschema.validate(req.body, schema);
+    // Deep clone to ensure schema validation is performed on a clean object
+    const bodyClone = JSON.parse(JSON.stringify(req.body));
+    const result = jsonschema.validate(bodyClone, schema);
     if (!result.valid) {
       return res.status(400).json({ success: false, error: "Invalid JSON data" });
     }
@@ -64,6 +67,15 @@ app.get("/api/health", (req, res) => {
 // ─── Main Scan Route ─────────────────────────────────────────────────────────
 app.post("/api/scan", async (req, res) => {
   let { repoUrl } = req.body;
+
+  // Handle potential encoded URL component from client
+  try {
+    if (repoUrl.includes("%")) {
+      repoUrl = decodeURIComponent(repoUrl);
+    }
+  } catch (e) {
+    // Continue if decoding fails
+  }
 
   // Validate and sanitize
   if (!repoUrl || typeof repoUrl !== "string") {
@@ -103,14 +115,15 @@ app.post("/api/scan", async (req, res) => {
   const fileResults = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    console.log(`[CodeSentinel] Analyzing file ${i + 1}/${files.length}: ${file.path}`);
+    const normalizedPath = path.normalize(file.path);
+    console.log(`[CodeSentinel] Analyzing file ${i + 1}/${files.length}: ${normalizedPath}`);
     try {
-      const result = await analyzeFile(file.path, file.content, file.extension);
+      const result = await analyzeFile(normalizedPath, file.content, file.extension);
       fileResults.push(result);
     } catch (err) {
-      console.error(`[CodeSentinel] Analysis error for ${file.path}: ${err.message}`);
+      console.error(`[CodeSentinel] Analysis error for ${normalizedPath}: ${err.message}`);
       fileResults.push({
-        file: file.path,
+        file: normalizedPath,
         vulnerabilities: [],
         file_summary: "Analysis failed for this file.",
         risk_score: 0,

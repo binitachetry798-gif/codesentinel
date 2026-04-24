@@ -48,8 +48,10 @@ export default function Dashboard() {
 
   const filterOptions = ["All", "Critical", "High", "Medium", "Low"];
 
-  // Sanitize repo_url for safe use in links/text
-  const sanitizedRepoUrl = repo_url ? DOMPurify.sanitize(repo_url) : "";
+  // Sanitize repo_url for safe use in links/text with strict character filtering
+  const sanitizedRepoUrl = repo_url 
+    ? DOMPurify.sanitize(decodeURIComponent(repo_url).replace(/[^a-zA-Z0-9:/._-]/g, "")) 
+    : "";
 
   return (
     <div className="mesh-bg" style={{ minHeight: "100vh" }}>
@@ -145,8 +147,10 @@ export default function Dashboard() {
               {files.map((f) => {
                 const score = f.risk_score || 0;
                 const chipColor = score > 70 ? "var(--red)" : score > 40 ? "var(--orange)" : "var(--text-3)";
-                // Sanitize file path/name
-                const fileName = f.file ? DOMPurify.sanitize(f.file.split("/").pop()) : "unknown";
+                // Sanitize file path/name with strict regex filtering
+                const fileName = f.file 
+                  ? DOMPurify.sanitize(f.file.split("/").pop().replace(/[^a-zA-Z0-9._-]/g, "")) 
+                  : "unknown";
                 return (
                   <div key={f.file} title={DOMPurify.sanitize(f.file)} style={{
                     padding: "4px 10px",

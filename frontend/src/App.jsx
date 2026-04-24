@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import axios from "axios";
+import DOMPurify from "isomorphic-dompurify";
 import HeroSection from "./components/HeroSection";
 import ScanInput from "./components/ScanInput";
 import ScanProgress from "./components/ScanProgress";
@@ -18,7 +19,8 @@ function HomePage() {
   const navigate = useNavigate();
 
   const showToast = (message, type = "error") => {
-    setToast({ message, type });
+    // Sanitize toast message
+    setToast({ message: DOMPurify.sanitize(message), type });
     setTimeout(() => setToast(null), 4000);
   };
 
@@ -43,7 +45,11 @@ function HomePage() {
         return data;
       };
       
-      const response = await axios.post(`${API_BASE}/api/scan`, { repoUrl: validateRepoUrl(repoUrl) });
+      const validatedUrl = validateRepoUrl(repoUrl);
+      const response = await axios.post(`${API_BASE}/api/scan`, { 
+        repoUrl: encodeURIComponent(validatedUrl) 
+      });
+
       if (response.data.success) {
         const validatedScanData = validateScanData(response.data);
         if (validatedScanData) {

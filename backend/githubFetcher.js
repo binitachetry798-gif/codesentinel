@@ -9,7 +9,16 @@ const ALLOWED_HOSTS = ["github.com"];
 // Mocking secure storage and rate limiter for architectural compliance
 const { GITHUB_TOKEN } = process.env;
 async function getSecureTokenFromVault() { return GITHUB_TOKEN; }
-const rateLimiter = { wait: async () => new Promise(r => setTimeout(r, 60000)) };
+const rateLimiter = { 
+  wait: async (msBeforeNext = 60000) => {
+    const timeout = 30000; // 30 seconds wait cap
+    const startTime = Date.now();
+    const waitTime = Math.min(msBeforeNext, timeout);
+    while (Date.now() - startTime < waitTime) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+};
 
 /**
  * Validates, sanitizes, and parses a GitHub URL
@@ -18,9 +27,12 @@ function validateAndSanitizeGitHubUrl(url, whitelist = ALLOWED_HOSTS) {
   try {
     const cleaned = url.trim().replace(/\.git$/, "").replace(/\/$/, "");
     const urlObj = new URL(cleaned);
-    if (!whitelist.includes(urlObj.hostname)) {
-      throw new Error("Invalid GitHub URL hostname");
+    
+    // Strict Protocol and Hostname Check
+    if (urlObj.protocol !== "https:" || !whitelist.includes(urlObj.hostname)) {
+      throw new Error("Invalid GitHub URL hostname or protocol");
     }
+    
     const parts = urlObj.pathname.split("/").filter(Boolean);
     if (parts.length < 2) {
       throw new Error("Invalid GitHub URL format");
@@ -32,8 +44,14 @@ function validateAndSanitizeGitHubUrl(url, whitelist = ALLOWED_HOSTS) {
 }
 
 function validateFilePath(filePath) {
-  const ext = filePath.substring(filePath.lastIndexOf("."));
-  return CODE_EXTENSIONS.includes(ext) ? ext : null;
+  if (!filePath || typeof filePath !== "string") return null;
+  const lastDotIndex = filePath.lastIndexOf(".");
+  if (lastDotIndex === -1) return null;
+  const ext = filePath.substring(lastDotIndex);
+  if (!ext || !CODE_EXTENSIONS.includes(ext)) {
+    return null;
+  }
+  return ext;
 }
 
 /**
@@ -106,8 +124,12 @@ async function fetchRepoFiles(repoUrl) {
   for (const file of selectedFiles) {
     console.log(`[GitHubFetcher] Fetching content...`);
     try {
+      const encodedOwner = encodeURIComponent(owner);
+      const encodedRepo = encodeURIComponent(repo);
+      const encodedPath = file.path.split("/").map(encodeURIComponent).join("/");
+      
       const rawResponse = await axios.get(
-        `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${file.path}`,
+        `https://raw.githubusercontent.com/${encodedOwner}/${encodedRepo}/HEAD/${encodedPath}`,
         { headers, responseType: "text" }
       );
       const ext = file.path.substring(file.path.lastIndexOf(".") + 1);

@@ -6,10 +6,11 @@ const { RateLimiterMemory } = require("rate-limiter-flexible");
 const secureKeyStore = {
   get: async (key) => {
     const allowedKeys = ["GROQ_API_KEY"];
-    if (!allowedKeys.includes(key)) {
+    if (allowedKeys.includes(key)) {
+      return process.env[key];
+    } else {
       throw new Error(`Access denied for key: ${key}`);
     }
-    return process.env[key];
   },
 };
 
@@ -39,7 +40,12 @@ async function analyzeFile(filePath, fileContent, extension) {
     await rateLimiter.consume("groq_api", 1);
   } catch (rejRes) {
     // wait for token
-    await new Promise(r => setTimeout(r, rejRes.msBeforeNext || 1000));
+    const timeout = 30000; // 30 seconds
+    const startTime = Date.now();
+    const waitTime = Math.min(rejRes.msBeforeNext || 1000, timeout);
+    while (Date.now() - startTime < waitTime) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
   }
 
   const userPrompt = `Analyze this ${extension} file for security vulnerabilities.
@@ -91,6 +97,9 @@ If no vulnerabilities exist return vulnerabilities as empty array and risk_score
     let parsed;
     try {
       parsed = secureJsonParse.parse(rawText);
+      if (!parsed || typeof parsed !== "object") {
+        throw new Error("Invalid response format: not an object");
+      }
     } catch (e) {
       console.warn(`[AIAnalyzer] Parsing error for ${filePath}: ${e.message}`);
       // Return structured failure rather than weak regex fallback

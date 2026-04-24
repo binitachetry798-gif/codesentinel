@@ -40,15 +40,21 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
   // Strict GitHub repository URL validation
   const validateGitHubRepositoryURL = (v) => {
     if (!v || !v.trim()) return "Please enter a GitHub repository URL.";
-    const targetUrl = v.trim();
-    if (!targetUrl.startsWith("https://github.com/")) return "URL must start with https://github.com/";
     try {
-      const parts = new URL(targetUrl).pathname.split("/").filter(Boolean);
+      const decoded = decodeURIComponent(v);
+      const targetUrl = decoded.trim();
+      if (!targetUrl.startsWith("https://github.com/")) return "URL must start with https://github.com/";
+      const urlObj = new URL(targetUrl);
+      const parts = urlObj.pathname.split("/").filter(Boolean);
       if (parts.length < 2) return "Please include both owner and repository name.";
     } catch (e) {
       return "Invalid URL format.";
     }
     return "";
+  };
+
+  const isAuthorizedRepository = (targetUrl) => {
+    return validateGitHubRepositoryURL(targetUrl) === "";
   };
 
   // Client side throttling state
@@ -62,20 +68,22 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
 
   const handleScan = (scanUrl) => {
     const target = scanUrl || url;
-    const err = validateGitHubRepositoryURL(target);
-    if (err) { setLocalError(err); return; }
-    
-    if (rateLimitAllowRequest()) {
-      setLocalError("");
-      onScan(target.trim());
+    if (isAuthorizedRepository(target)) {
+      if (rateLimitAllowRequest()) {
+        setLocalError("");
+        const decoded = decodeURIComponent(target);
+        onScan(decoded.trim());
+      } else {
+        setLocalError("Please wait a few seconds before scanning again.");
+      }
     } else {
-      setLocalError("Please wait a few seconds before scanning again.");
+      setLocalError(validateGitHubRepositoryURL(target));
     }
   };
 
   const fillUrl = (repoUrl) => {
     if (validateGitHubRepositoryURL(repoUrl) === "") {
-      setUrl(repoUrl);
+      setUrl(encodeURIComponent(repoUrl));
       setLocalError("");
       inputRef.current?.focus();
     }
@@ -149,7 +157,8 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
                 onChange={(e) => {
                   // Sanitize input: allow only common URL characters
                   const sanitizedUrl = e.target.value.replace(/[^a-zA-Z0-9:/._-]/g, "");
-                  setUrl(sanitizedUrl);
+                  // The user requested encoding the sanitized URL in setUrl
+                  setUrl(encodeURIComponent(sanitizedUrl));
                   setLocalError("");
                 }}
                 onKeyDown={(e) => e.key === "Enter" && handleScan()}
@@ -288,7 +297,7 @@ export default function ScanInput({ onScan, isLoading, error: externalError }) {
       {/* Live demo button */}
       <button
         className="btn btn-ghost"
-        onClick={() => { setUrl("https://github.com/OWASP/NodeGoat"); onScan("https://github.com/OWASP/NodeGoat"); }}
+        onClick={() => { setUrl(encodeURIComponent("https://github.com/OWASP/NodeGoat")); handleScan("https://github.com/OWASP/NodeGoat"); }}
         disabled={isLoading}
         style={{ padding: "10px 22px", fontSize: "0.85rem", animation: "fadeUp 0.6s 0.2s ease both" }}
       >
