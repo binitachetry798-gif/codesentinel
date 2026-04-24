@@ -171,13 +171,17 @@ app.post("/api/scan", async (req, res) => {
 
 // ─── Error Handler ────────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error("[CodeSentinel] Unhandled error:", {
+  console.error("[CodeSentinel] Unhandled error");
+  console.error(`Scan failed${err.lineNumber ? ` at line ${err.lineNumber}` : ""}: ${err.message}`);
+  
+  // Log full context for debugging
+  console.error("Context:", {
     method: req.method,
     url: req.url,
     user_agent: req.headers["user-agent"],
-    error: err.message,
     stack: err.stack,
   });
+  
   res.status(500).json({ success: false, error: "Internal server error" });
 });
 
